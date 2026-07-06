@@ -23,7 +23,7 @@ public class KafkaEventPublisher {
 
     public KafkaEventPublisher(
         KafkaTemplate<String, String> kafkaTemplate,
-        @Value("${app.kafka.topic}") String topic
+        @Value("${app.messaging.topic}") String topic
     ) {
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;

@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 public class KafkaEventListener {
     private static final Logger log = LoggerFactory.getLogger(KafkaEventListener.class);
 
-    @KafkaListener(id = "templateConsumer", topics = "${app.kafka.topic}",
+    @KafkaListener(id = "templateConsumer", topics = "${app.messaging.topic}",
             groupId = "${spring.kafka.consumer.group-id:template-group}")
     public void listen(String message,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
