@@ -7,8 +7,12 @@ import java.lang.annotation.Target;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 
+/**
+ * Meta-annotation that restricts a handler method to callers with the USER role.
+ * A readable alias for {@code @PreAuthorize("hasRole('USER')")}.
+ */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-@PreAuthorize("hasRole('ADMIN')")
-public @interface IAdminRole {
+@PreAuthorize("hasRole('USER')")
+public @interface UserOnly {
 }

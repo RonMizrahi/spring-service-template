@@ -1,0 +1,42 @@
+# Local development: in-memory H2, verbose SQL, a seeded admin user, full tracing.
+# Redis/Kafka default to localhost so `docker compose --profile full up` just works;
+# flip app.cache.enabled / app.messaging.enabled to true once those containers run.
+spring:
+  datasource:
+    url: jdbc:h2:mem:devdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:template-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+security:
+  jwt:
+    # Dev-only default so the template runs with zero setup. NEVER used in stg/prod.
+    secret: ${JWT_SECRET:dev-only-secret-change-me-at-least-32-characters-long}
+
+app:
+  cache:
+    enabled: ${APP_CACHE_ENABLED:false}
+  messaging:
+    enabled: ${APP_MESSAGING_ENABLED:false}
+  init:
+    add-admin: true            # seeds admin/admin (password hashed by the encoder)

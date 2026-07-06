@@ -3,51 +3,54 @@ package com.example.template.interceptor;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import com.example.template.model.SubscriptionPlan;
 import com.example.template.model.entity.User;
-import com.example.template.repository.UserRepository;
 
-import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+/**
+ * Per-user rate limiting driven by the caller's subscription plan.
+ *
+ * <p>The plan is read from the authenticated {@link User} principal (placed in the context by the
+ * JWT filter), so there is no per-request database lookup. Buckets are keyed by {@code username|plan}
+ * so a plan change rebuilds the bucket rather than keeping the old limit.</p>
+ *
+ * <p>The bucket map is in-memory and not evicted — fine for a single instance or demo. A
+ * multi-instance production service should use a distributed store (bucket4j-redis) with eviction.</p>
+ */
 @Component
 public class SubscriptionRateLimitInterceptor implements HandlerInterceptor {
-    // user -> Bucket
-    private final Map<String, Bucket> userBuckets = new ConcurrentHashMap<>();
 
-    @Autowired
-    private UserRepository userRepository;
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof UserDetails userDetails) {
-            String username = userDetails.getUsername();
-            User user = userRepository.findByUsername(username).orElse(null);
-            if (user != null) {
-                SubscriptionPlan subscriptionPlan = user.getSubscriptionPlan();
-                Bucket bucket = userBuckets.computeIfAbsent(username, k -> createBucket(subscriptionPlan));
-                if (!bucket.tryConsume(1)) {
-                    response.setStatus(429);
-                    response.getWriter().write("Rate limit exceeded");
-                    return false;
-                }
-            }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return true; // unauthenticated or non-user principal: nothing to rate limit
         }
-        return true;
-    }
 
-    private Bucket createBucket(SubscriptionPlan plan) {
-        Bandwidth limit = plan.getLimit();
-        return Bucket.builder().addLimit(limit).build();
+        SubscriptionPlan plan = user.getSubscriptionPlan();
+        String key = user.getUsername() + "|" + plan.name();
+        Bucket bucket = buckets.computeIfAbsent(key, k -> Bucket.builder().addLimit(plan.getLimit()).build());
+
+        if (bucket.tryConsume(1)) {
+            return true;
+        }
+
+        response.setStatus(429);
+        response.setContentType(MediaType.TEXT_PLAIN_VALUE);
+        response.setHeader("Retry-After", "60");
+        response.getWriter().write("Rate limit exceeded");
+        return false;
     }
 }

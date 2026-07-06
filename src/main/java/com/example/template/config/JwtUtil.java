@@ -1,6 +1,7 @@
 package com.example.template.config;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Set;
 
@@ -42,7 +43,7 @@ public final class JwtUtil {
         if (jwtSecret == null || jwtSecret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 32 characters long for HS256");
         }
-        this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         this.jwtExpirationMs = jwtExpirationMs;
     }
 

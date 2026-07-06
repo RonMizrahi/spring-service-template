@@ -9,14 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Integration tests for DatabaseHealthIndicator to verify database health monitoring.
- * 
- * @author Backend Architect
- * @since 1.0
  */
 @SpringBootTest
+@ActiveProfiles("test")
 class DatabaseHealthIndicatorTest {
 
     @Autowired
