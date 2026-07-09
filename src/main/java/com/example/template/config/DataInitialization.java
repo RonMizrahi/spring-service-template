@@ -36,44 +36,39 @@ public class DataInitialization {
     private final PasswordEncoder passwordEncoder;
     
     /**
-     * Creates a default admin user if it doesn't already exist.
-     * This method is called after the application context is ready.
-     * Only executes when this configuration is active (app.init.add-admin=true).
-     * 
-     * The admin user is created with:
-     * - Username: "admin"
-     * - Password: "password"
-     * - Role: ADMIN
-     * - Subscription Plan: PROFESSIONAL
+     * Seeds two demo users if they do not already exist. Runs after the context is ready and
+     * only when {@code app.init.add-admin=true} (dev only — never enable in stg/prod).
+     *
+     * <p>Passwords are hashed here through the application's {@link PasswordEncoder}, so no
+     * plaintext or hand-written hash ever lives in SQL:</p>
+     * <ul>
+     *   <li>{@code admin} / {@code admin} — ROLE_ADMIN, PROFESSIONAL plan</li>
+     *   <li>{@code user} / {@code user} — ROLE_USER, FREE plan</li>
+     * </ul>
      */
     @EventListener(ApplicationReadyEvent.class)
-    public void createDefaultAdminUser() {
-        logger.debug("Checking if default admin user creation is needed");
-        
+    public void createDefaultUsers() {
+        // Guard on the username actually created so the seed is idempotent on a persistent DB.
         if (userRepository.findByUsername("admin").isEmpty()) {
-            logger.info("Creating default admin user");
+            logger.info("Seeding default demo users (admin/admin, user/user)");
 
-            // Create admin role
             User adminUser = new User();
-            adminUser.setUsername("test-admin");
-            adminUser.setPassword(passwordEncoder.encode("password"));
+            adminUser.setUsername("admin");
+            adminUser.setPassword(passwordEncoder.encode("admin"));
             adminUser.setRoles(Set.of(Role.ADMIN));
             adminUser.setSubscriptionPlan(SubscriptionPlan.PROFESSIONAL);
             userRepository.save(adminUser);
 
-            // Create user role
-            // Create admin role
-            User userUser = new User();
-            userUser.setUsername("test-user");
-            userUser.setPassword(passwordEncoder.encode("password"));
-            userUser.setRoles(Set.of(Role.USER));
-            userUser.setSubscriptionPlan(SubscriptionPlan.FREE);
-            userRepository.save(userUser);
+            User regularUser = new User();
+            regularUser.setUsername("user");
+            regularUser.setPassword(passwordEncoder.encode("user"));
+            regularUser.setRoles(Set.of(Role.USER));
+            regularUser.setSubscriptionPlan(SubscriptionPlan.FREE);
+            userRepository.save(regularUser);
 
-            logger.info("Default admin user created successfully with username: admin");
-            logger.warn("Please change the default admin password immediately for security purposes");
+            logger.warn("Seeded demo users with well-known passwords — for local development only.");
         } else {
-            logger.debug("Admin user already exists, skipping creation");
+            logger.debug("Demo users already exist, skipping seed");
         }
     }
 }

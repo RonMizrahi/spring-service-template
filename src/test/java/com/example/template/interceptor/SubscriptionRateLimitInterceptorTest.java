@@ -1,77 +1,72 @@
 package com.example.template.interceptor;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.when;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.Optional;
 import java.util.Set;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import com.example.template.model.Role;
 import com.example.template.model.SubscriptionPlan;
 import com.example.template.model.entity.User;
-import com.example.template.repository.UserRepository;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 class SubscriptionRateLimitInterceptorTest {
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private HttpServletRequest request;
-    @Mock
-    private HttpServletResponse response;
-    @Mock
-    private UserDetails userDetails;
-    @InjectMocks
-    private SubscriptionRateLimitInterceptor rateLimitInterceptor;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
+    // Fresh interceptor (and bucket map) per test method — JUnit 5 defaults to PER_METHOD.
+    private final SubscriptionRateLimitInterceptor interceptor = new SubscriptionRateLimitInterceptor();
+
+    @AfterEach
+    void clearContext() {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
-    @DisplayName("Allows request when under rate limit")
-    void preHandle_allowsRequest() throws Exception {
-        User user = new User(1L, "user1", "pass", Set.of(Role.USER), SubscriptionPlan.BASIC);
-        when(userDetails.getUsername()).thenReturn("user1");
+    private void authenticateAs(User user) {
         SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(userDetails, null));
-        when(userRepository.findByUsername("user1")).thenReturn(Optional.of(user));
-        boolean result = rateLimitInterceptor.preHandle(request, response, new Object());
-        assertTrue(result);
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+    }
+
+    private User user(String name, SubscriptionPlan plan) {
+        User u = new User();
+        u.setUsername(name);
+        u.setPassword("x");
+        u.setRoles(Set.of(Role.USER));
+        u.setSubscriptionPlan(plan);
+        return u;
     }
 
     @Test
-    @DisplayName("Blocks request when over rate limit")
-    void preHandle_blocksWhenOverLimit() throws Exception {
-        User user = new User(1L, "user1", "pass", Set.of(Role.USER), SubscriptionPlan.FREE);
-        when(userDetails.getUsername()).thenReturn("user1");
-        SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(userDetails, null));
-        when(userRepository.findByUsername("user1")).thenReturn(Optional.of(user));
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw);
-        when(response.getWriter()).thenReturn(pw);
-        // Exhaust the bucket
-        for (int i = 0; i < 3; i++) {
-            rateLimitInterceptor.preHandle(request, response, new Object());
-        }
-        boolean result = rateLimitInterceptor.preHandle(request, response, new Object());
-        assertFalse(result);
+    void allowsUpToPlanCapacityThenRejects() throws Exception {
+        authenticateAs(user("free-user", SubscriptionPlan.FREE)); // capacity 2
+
+        assertTrue(interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object()));
+        assertTrue(interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object()));
+        assertFalse(interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object()));
+    }
+
+    @Test
+    void rejectionIs429WithRetryAfterHeader() throws Exception {
+        authenticateAs(user("free-user", SubscriptionPlan.FREE));
+        interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object());
+        interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object());
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        boolean allowed = interceptor.preHandle(new MockHttpServletRequest(), response, new Object());
+
+        assertFalse(allowed);
+        assertEquals(429, response.getStatus());
+        assertEquals("60", response.getHeader("Retry-After"));
+    }
+
+    @Test
+    void unauthenticatedRequestsAreNotRateLimited() throws Exception {
+        boolean allowed = interceptor.preHandle(new MockHttpServletRequest(), new MockHttpServletResponse(), new Object());
+        assertTrue(allowed);
     }
 }

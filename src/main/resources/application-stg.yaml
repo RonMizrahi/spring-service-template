@@ -1,40 +1,29 @@
-# PostgreSQL profile configuration
+# Staging: PostgreSQL, Redis and Kafka from the environment; no seeded users.
+# Hibernate may adjust the schema (update) here; production only validates it.
 spring:
-  config:
-    activate:
-      on-profile: postgres
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:springdb}
-    username: ${POSTGRES_USER:spring}
-    password: ${POSTGRES_PASSWORD:spring123}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
-        '[format_sql]': true
         jdbc:
-          '[time_zone]': UTC
-
-# Redis configuration for external Redis
+          time_zone: UTC
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
-      jedis:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-
-# Kafka configuration for external Kafka
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     consumer:
       group-id: ${KAFKA_CONSUMER_GROUP:template-group}
       auto-offset-reset: earliest
@@ -43,15 +32,19 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    # To use a managed broker (e.g. Confluent Cloud), inject these via the environment:
+    # properties:
+    #   security.protocol: SASL_SSL
+    #   sasl.mechanism: PLAIN
+    #   sasl.jaas.config: ${KAFKA_SASL_JAAS_CONFIG}
 
-# Zipkin configuration for external Zipkin
+app:
+  cache:
+    enabled: true
+  messaging:
+    enabled: true
+
 management:
-  zipkin:
-    tracing:
-      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
-
-logging:
-  level:
-    '[org.springframework.kafka]': INFO
-    '[org.springframework.data.redis]': INFO
-    '[org.postgresql]': INFO
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING:0.5}

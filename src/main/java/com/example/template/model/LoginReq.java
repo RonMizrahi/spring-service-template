@@ -1,4 +1,5 @@
 package com.example.template.model;
 
-public record LoginReq(String username, String password) {}
+import jakarta.validation.constraints.NotBlank;
 
+public record LoginReq(@NotBlank String username, @NotBlank String password) {}

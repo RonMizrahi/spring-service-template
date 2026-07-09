@@ -1,0 +1,30 @@
+# Test profile: in-memory H2, tracing/Redis/Kafka off, seeded users on.
+# Activated with @ActiveProfiles("test"); keeps tests fast, isolated, and offline.
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+security:
+  jwt:
+    secret: test-only-secret-at-least-32-characters-long-000
+    expiration-ms: 86400000
+
+app:
+  cache:
+    enabled: false
+  messaging:
+    enabled: false
+  init:
+    add-admin: true
+
+management:
+  tracing:
+    enabled: false

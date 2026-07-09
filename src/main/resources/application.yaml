@@ -1,37 +1,43 @@
-# Spring Boot YAML configuration
+# Base configuration shared by every profile.
+# Environment-specific overrides live in application-{dev,stg,prod}.yaml.
+# Select one with SPRING_PROFILES_ACTIVE (defaults to dev for local runs).
 
 spring:
   application:
-    name: sprint-boot-3.5-template
+    name: spring-service-template
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   threads:
     virtual:
-      enabled: true
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driverClassName: org.h2.Driver
-    username: sa
-    password: password
+      enabled: true            # Boot 3.2+ runs Tomcat and @Async on virtual threads from this flag alone.
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    show-sql: true
-    hibernate:
-      ddl-auto: create-drop
-    defer-datasource-initialization: true
-#  properties:
-#    hibernate:
-#      default_schema: myschema
-lifecycle:
-  timeout-per-shutdown-phase: 30s
+    open-in-view: false        # don't hold a JPA session open through view rendering
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
 server:
   address: 0.0.0.0
   port: 8080
   shutdown: graceful
 
+# JWT signing secret. No default here on purpose: stg/prod MUST inject JWT_SECRET
+# (docker/helm/env) or the app fails fast at startup. The dev profile supplies a
+# local default so a freshly generated service runs with zero setup.
 security:
   jwt:
-    secret: change-this-secret-key-to-a-very-long-random-string-at-least-32-characters
-    expiration-ms: 86400000
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+# Feature toggles for optional infrastructure. Off by default so the app boots with
+# just a database; each environment turns Redis/Kafka on when they are available.
+app:
+  cache:
+    enabled: ${APP_CACHE_ENABLED:false}
+  messaging:
+    enabled: ${APP_MESSAGING_ENABLED:false}
+    topic: ${APP_KAFKA_TOPIC:template-events}
+  init:
+    add-admin: ${APP_INIT_ADD_ADMIN:false}
 
 management:
   endpoints:
@@ -44,10 +50,6 @@ management:
       show-components: always
       probes:
         enabled: true
-    circuitbreakers:
-      enabled: true
-    metrics:
-      enabled: true
   info:
     env:
       enabled: true
@@ -59,15 +61,10 @@ management:
   tracing:
     enabled: true
     sampling:
-      probability: 1.0
+      probability: ${TRACING_SAMPLING:1.0}
   zipkin:
     tracing:
-      endpoint: http://localhost:9411/api/v2/spans
-  simple:
-    metrics:
-      export:
-        enabled: true
-        step: 60s
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
   metrics:
     enable:
       jvm: true
@@ -75,16 +72,12 @@ management:
       process: true
       jdbc: true
       hikaricp: true
-      auth: true
-      external-api: true
 
 springdoc:
   api-docs:
     path: /api-docs
-    enabled: true
   swagger-ui:
     path: /swagger-ui.html
-    enabled: true
     try-it-out-enabled: true
   show-actuator: false
 
@@ -104,30 +97,16 @@ resilience4j:
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 2
 
-app:
-  init:
-    add-admin: true
-
 info:
   app:
     name: Spring Service Template
     description: A Spring Boot 3.5 template with JWT authentication and virtual threads
     version: "@project.version@"
-    encoding: "@project.build.sourceEncoding@"
     java:
       version: "@java.version@"
-  build:
-    timestamp: "@maven.build.timestamp@"
-    artifact: "@project.artifactId@"
-    group: "@project.groupId@"
   environment:
     profile: "${spring.profiles.active:default}"
     virtual-threads: "${spring.threads.virtual.enabled}"
-    server:
-      port: "${server.port}"
 
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] %-40.40logger{39} : %m%n"
-    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
-
+# No custom console pattern: Boot's default already appends the correlation id
+# (application name, traceId, spanId) once Micrometer tracing is on the classpath.
